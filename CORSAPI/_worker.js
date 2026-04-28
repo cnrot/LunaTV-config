@@ -86,20 +86,39 @@ function addOrReplacePrefix(obj, newPrefix) {
   return newObj
 }
 
-function toTvboxUrls(data) {
+function toTvboxConfig(data) {
   if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') {
-    return { urls: [] }
+    return {
+      spider: '',
+      sites: [],
+      parses: [],
+      rules: [],
+      flags: [],
+      ads: []
+    }
   }
 
-  const urls = Object.values(data.api_site)
-    .filter(item => item && typeof item === 'object')
-    .map(item => ({
-      name: typeof item.name === 'string' ? item.name : '',
-      url: typeof item.api === 'string' ? item.api : ''
+  const sites = Object.entries(data.api_site)
+    .filter(([, item]) => item && typeof item === 'object')
+    .map(([key, item]) => ({
+      key,
+      name: typeof item.name === 'string' ? item.name : key,
+      type: 1,
+      api: typeof item.api === 'string' ? item.api : '',
+      searchable: 1,
+      changeable: 1,
+      quickSearch: 1
     }))
-    .filter(item => item.name && item.url)
+    .filter(site => site.api)
 
-  return { urls }
+  return {
+    spider: '',
+    sites,
+    parses: [],
+    rules: [],
+    flags: [],
+    ads: []
+  }
 }
 
 // ---------- 安全版：KV 缓存 ----------
@@ -249,7 +268,7 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
       : data
 
     if (config.tvbox) {
-      const tvboxData = toTvboxUrls(data)
+      const tvboxData = toTvboxConfig(data)
       return new Response(JSON.stringify(tvboxData), {
         headers: { 'Content-Type': 'application/json;charset=UTF-8', ...CORS_HEADERS },
       })
@@ -309,7 +328,7 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
             <code>1</code> 或 <code>proxy</code> = 添加代理前缀<br>
             <code>2</code> 或 <code>base58</code> = 原始 Base58 编码<br>
             <code>3</code> 或 <code>proxy-base58</code> = 代理 Base58 编码<br>
-            <code>tvbox</code> = TVBox 明文 JSON（urls 列表）</td>
+            <code>tvbox</code> = TVBox/XMBOX 点播配置 JSON（含 sites）</td>
       </tr>
       <tr>
         <td>source</td>
