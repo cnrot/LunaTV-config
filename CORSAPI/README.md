@@ -36,6 +36,7 @@ https://<你的域名>/?url=https://ikunzyapi.com/api.php/provide/vod/
 - **`format=1`** 或 **`format=proxy`** - 添加代理前缀的 JSON
 - **`format=2`** 或 **`format=base58`** - 原始 JSON 的 Base58 编码
 - **`format=3`** 或 **`format=proxy-base58`** - 代理前缀 JSON 的 Base58 编码
+- **`format=tvbox`** - TVBox 风格明文 JSON（`{"urls":[{"name","url"}]}`）
 
 **示例：**
 
@@ -104,6 +105,12 @@ https://api.example.workers.dev/?format=3&source=full
 https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.com/?url=
 ```
 
+### 示例 7：TVBox 明文 JSON（完整版）
+
+```jsx
+https://api.example.workers.dev/?format=tvbox&source=full
+```
+
 ---
 
 ## 🛠️ 参数说明
@@ -111,7 +118,7 @@ https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.co
 | 参数     | 说明             | 可选值                          | 示例         |        
 | -------- | ---------------- | ------------------------------- | ------------ |
 | `url`    | 代理任意 API 请求 | 任意有效 URL                     | `?url=https://...` |
-| `format` | 配置模式         | `0 或 raw = 原始 JSON`  `1 或 proxy = 添加代理前缀`  `2 或 base58 = 原始 Base58`  `3 或 proxy-base58 = 代理 Base58` | `?format=0` |
+| `format` | 配置模式         | `0 或 raw = 原始 JSON`  `1 或 proxy = 添加代理前缀`  `2 或 base58 = 原始 Base58`  `3 或 proxy-base58 = 代理 Base58`  `tvbox = TVBox 明文 JSON` | `?format=0` |
 | `source` | 配置源选择       | `jin18` = 精简版`jingjian` = 精简+成人`full` = 完整版） | `?source=jin18` |
 | `prefix` | 自定义代理前缀   | 任意代理地址                      | `?prefix=https://.../?url=` |
 | `errors&limit=10` | 查看错误日志 | `errors&limit=10`                 | `https://<你的域名>?errors&limit=10` |
@@ -178,6 +185,9 @@ https://<你的域名>/?format=2&source=full
 
 # 代理 Base58 编码（推荐用于订阅）
 https://<你的域名>/?format=3&source=full
+
+# TVBox 明文 JSON
+https://<你的域名>/?format=tvbox&source=full
 ```
 
 ---

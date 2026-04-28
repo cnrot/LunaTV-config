@@ -37,7 +37,8 @@ const FORMAT_CONFIG = {
   '2': { proxy: false, base58: true },
   'base58': { proxy: false, base58: true },
   '3': { proxy: true, base58: true },
-  'proxy-base58': { proxy: true, base58: true }
+  'proxy-base58': { proxy: true, base58: true },
+  'tvbox': { tvbox: true }
 }
 
 // Base58 编码函数
@@ -83,6 +84,22 @@ function addOrReplacePrefix(obj, newPrefix) {
     }
   }
   return newObj
+}
+
+function toTvboxUrls(data) {
+  if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') {
+    return { urls: [] }
+  }
+
+  const urls = Object.values(data.api_site)
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      name: typeof item.name === 'string' ? item.name : '',
+      url: typeof item.api === 'string' ? item.api : ''
+    }))
+    .filter(item => item.name && item.url)
+
+  return { urls }
 }
 
 // ---------- 安全版：KV 缓存 ----------
@@ -231,6 +248,13 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
       ? addOrReplacePrefix(data, prefixParam || defaultPrefix)
       : data
 
+    if (config.tvbox) {
+      const tvboxData = toTvboxUrls(data)
+      return new Response(JSON.stringify(tvboxData), {
+        headers: { 'Content-Type': 'application/json;charset=UTF-8', ...CORS_HEADERS },
+      })
+    }
+
     if (config.base58) {
       const encoded = base58Encode(newData)
       return new Response(encoded, {
@@ -284,7 +308,8 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
         <td><code>0</code> 或 <code>raw</code> = 原始 JSON<br>
             <code>1</code> 或 <code>proxy</code> = 添加代理前缀<br>
             <code>2</code> 或 <code>base58</code> = 原始 Base58 编码<br>
-            <code>3</code> 或 <code>proxy-base58</code> = 代理 Base58 编码</td>
+            <code>3</code> 或 <code>proxy-base58</code> = 代理 Base58 编码<br>
+            <code>tvbox</code> = TVBox 明文 JSON（urls 列表）</td>
       </tr>
       <tr>
         <td>source</td>
@@ -323,6 +348,7 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=full</code> <button class="copy-btn">复制</button></p>
     <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=full</code> <button class="copy-btn">复制</button></p>
     <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=full</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox 明文 JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=full</code> <button class="copy-btn">复制</button></p>
   </div>
   
   <h2>支持的功能</h2>
@@ -334,6 +360,7 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <li>✅ 超时保护（9 秒）</li>
     <li>✅ 支持多种配置源切换</li>
     <li>✅ 支持 Base58 编码输出</li>
+    <li>✅ 支持 TVBox 明文 JSON 输出（format=tvbox）</li>
   </ul>
   
   <script>
