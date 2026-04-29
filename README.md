@@ -79,8 +79,8 @@ https://<你的域名>/?url=https://ikunzyapi.com/api.php/provide/vod/
 - **`format=1`** 或 **`format=proxy`** - 添加代理前缀的 JSON
 - **`format=2`** 或 **`format=base58`** - 原始 JSON 的 Base58 编码
 - **`format=3`** 或 **`format=proxy-base58`** - 代理前缀 JSON 的 Base58 编码
-- **`format=tvbox`** - TVBox 原始 JSON（包含 `sites`）
-- **`format=tvbox-base58`** - TVBox 原始 Base58
+- **`format=tvbox`** - TVBox/XC 风格 JSON
+- **`format=tvbox-base58`** - TVBox/XC 风格 Base58
 
 --- 
 
@@ -166,13 +166,13 @@ https://api.example.workers.dev/?format=3&source=jingjian
 https://api.example.workers.dev/?format=1&source=full&prefix=https://my-proxy.com/?url=
 ```
 
-### 示例 7：TVBox 原始 JSON（完整版）
+### 示例 7：TVBox/XC 风格 JSON（完整版）
 
 ```jsx
 https://api.example.workers.dev/?format=tvbox&source=full
 ```
 
-### 示例 8：TVBox 原始 Base58（完整版）
+### 示例 8：TVBox/XC 风格 Base58（完整版）
 
 ```jsx
 https://api.example.workers.dev/?format=tvbox-base58&source=full
@@ -190,7 +190,7 @@ https://api.example.workers.dev/?format=tvbox-base58&source=full
 | 参数     | 说明             | 可选值                          | 示例         |        
 | -------- | ---------------- | ------------------------------- | ------------ |
 | `url`    | 代理任意 API 请求 | 任意有效 URL                     | `?url=https://...` |
-| `format` | 配置模式         | `format=0 或 raw - 原始 JSON` <br> `format=1 或 proxy - 添加代理前缀` <br> `format=2 或 base58 - 原始 Base58` <br> `format=3 或 proxy-base58 - 代理 Base58` <br> `format=tvbox - TVBox 原始 JSON（sites）` <br> `format=tvbox-base58 - TVBox 原始 Base58` | `?format=0` |
+| `format` | 配置模式         | `format=0 或 raw - 原始 JSON` <br> `format=1 或 proxy - 添加代理前缀` <br> `format=2 或 base58 - 原始 Base58` <br> `format=3 或 proxy-base58 - 代理 Base58` <br> `format=tvbox - TVBox/XC 风格 JSON` <br> `format=tvbox-base58 - TVBox/XC 风格 Base58` | `?format=0` |
 | `source` | 配置源选择       | `source=jin18` - 精简版 <br> `source=jingjian` - 精简+成人 <br> `source=full` - 完整版） | `?source=jin18` |
 | `prefix` | 自定义代理前缀   | 任意代理地址                      | `?prefix=https://.../?url=` |
 | `errors&limit=10` | 查看错误日志 | `errors&limit=10`                 | `https://<你的域名>?errors&limit=10` |
@@ -236,10 +236,10 @@ https://<你的域名>/?format=2&source=jin18
 # 代理 Base58 编码（推荐用于订阅）
 https://<你的域名>/?format=3&source=jin18
 
-# TVBox 原始 JSON
+# TVBox/XC 风格 JSON
 https://<你的域名>/?format=tvbox&source=jin18
 
-# TVBox 原始 Base58
+# TVBox/XC 风格 Base58
 https://<你的域名>/?format=tvbox-base58&source=jin18
 ```
 
@@ -258,10 +258,10 @@ https://<你的域名>/?format=2&source=jingjian
 # 代理 Base58 编码（推荐用于订阅）
 https://<你的域名>/?format=3&source=jingjian
 
-# TVBox 原始 JSON
+# TVBox/XC 风格 JSON
 https://<你的域名>/?format=tvbox&source=jingjian
 
-# TVBox 原始 Base58
+# TVBox/XC 风格 Base58
 https://<你的域名>/?format=tvbox-base58&source=jingjian
 ```
 
@@ -280,10 +280,10 @@ https://<你的域名>/?format=2&source=full
 # 代理 Base58 编码（推荐用于订阅）
 https://<你的域名>/?format=3&source=full
 
-# TVBox 原始 JSON
+# TVBox/XC 风格 JSON
 https://<你的域名>/?format=tvbox&source=full
 
-# TVBox 原始 Base58
+# TVBox/XC 风格 Base58
 https://<你的域名>/?format=tvbox-base58&source=full
 ```
 
