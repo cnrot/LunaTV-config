@@ -273,6 +273,45 @@ async function fetchSourceJson(url) {
   }
 }
 
+async function fetchSourceList(source, pg) {
+  const base = source.api
+  const joiner = base.includes('?') ? '&' : '?'
+  const candidates = [
+    `${base}${joiner}ac=videolist&pg=${pg}`,
+    `${base}${joiner}ac=list&pg=${pg}`,
+    `${base}${joiner}pg=${pg}`
+  ]
+
+  for (const url of candidates) {
+    const res = await fetchSourceJson(url)
+    if (res && Array.isArray(res.list) && res.list.length) {
+      return res.list
+    }
+  }
+
+  return []
+}
+
+async function fetchSourceSearchList(source, wd, pg) {
+  const base = source.api
+  const joiner = base.includes('?') ? '&' : '?'
+  const keyword = encodeURIComponent(wd)
+  const candidates = [
+    `${base}${joiner}ac=videolist&wd=${keyword}&pg=${pg}`,
+    `${base}${joiner}ac=list&wd=${keyword}&pg=${pg}`,
+    `${base}${joiner}wd=${keyword}&pg=${pg}`
+  ]
+
+  for (const url of candidates) {
+    const res = await fetchSourceJson(url)
+    if (res && Array.isArray(res.list) && res.list.length) {
+      return res.list
+    }
+  }
+
+  return []
+}
+
 function getSourcePoolFromData(data) {
   if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') return []
   return Object.entries(data.api_site)
@@ -328,11 +367,7 @@ function toAggListItem(vod, sourceKey) {
 
 async function buildPoolCandidates(data) {
   const pool = getSourcePoolFromData(data)
-  const tested = await Promise.all(pool.map(async (src) => {
-    const probe = await fetchSourceJson(`${src.api}${src.api.includes('?') ? '&' : '?'}ac=videolist&pg=1`)
-    return probe && Array.isArray(probe.list) ? src : null
-  }))
-  return tested.filter(Boolean)
+  return pool.slice(0, 30)
 }
 
 async function handleTvboxAggRequest(reqUrl) {
@@ -342,6 +377,13 @@ async function handleTvboxAggRequest(reqUrl) {
   const sourcePool = await buildPoolCandidates(data)
 
   const ac = reqUrl.searchParams.get('ac') || ''
+  if (reqUrl.searchParams.get('debug') === '1') {
+    return tvboxJsonResponse({
+      sourcePoolCount: sourcePool.length,
+      sourcePoolSample: sourcePool.slice(0, 5).map(s => ({ key: s.key, name: s.name, api: s.api })),
+      classMap: TVBOX_CLASS_MAP.map(c => ({ type_id: c.type_id, type_name: c.type_name }))
+    })
+  }
   const t = reqUrl.searchParams.get('t') || ''
   const wd = reqUrl.searchParams.get('wd') || ''
   const pg = Math.max(1, Number(reqUrl.searchParams.get('pg') || '1'))
@@ -359,9 +401,8 @@ async function handleTvboxAggRequest(reqUrl) {
     const normalizedType = normalizeClassId(t)
     const results = []
     for (const source of sourcePool) {
-      const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&pg=${pg}`)
-      if (!res || !Array.isArray(res.list)) continue
-      for (const vod of res.list) {
+      const listData = await fetchSourceList(source, pg)
+      for (const vod of listData) {
         if (classifyVod(vod) === normalizedType) results.push(toAggListItem(vod, source.key))
       }
     }
@@ -375,9 +416,8 @@ async function handleTvboxAggRequest(reqUrl) {
     if (!list.length) {
       const fallback = []
       for (const source of sourcePool) {
-        const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&pg=${pg}`)
-        if (!res || !Array.isArray(res.list)) continue
-        for (const vod of res.list.slice(0, 20)) fallback.push(toAggListItem(vod, source.key))
+        const listData = await fetchSourceList(source, pg)
+        for (const vod of listData.slice(0, 20)) fallback.push(toAggListItem(vod, source.key))
       }
       const fbMap = new Map()
       for (const item of fallback) {
@@ -394,9 +434,8 @@ async function handleTvboxAggRequest(reqUrl) {
   if ((ac === 'videolist' || ac === 'search') && wd) {
     const all = []
     for (const source of sourcePool) {
-      const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&wd=${encodeURIComponent(wd)}&pg=${pg}`)
-      if (!res || !Array.isArray(res.list)) continue
-      for (const vod of res.list) all.push(toAggListItem(vod, source.key))
+      const listData = await fetchSourceSearchList(source, wd, pg)
+      for (const vod of listData) all.push(toAggListItem(vod, source.key))
     }
     const dedupMap = new Map()
     for (const item of all) {
