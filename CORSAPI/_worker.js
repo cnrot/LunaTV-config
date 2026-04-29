@@ -380,8 +380,8 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
             <code>1</code> 或 <code>proxy</code> = 添加代理前缀<br>
             <code>2</code> 或 <code>base58</code> = 原始 Base58 编码<br>
             <code>3</code> 或 <code>proxy-base58</code> = 代理 Base58 编码<br>
-            <code>tvbox</code> = TVBox/XC 风格 JSON<br>
-            <code>tvbox-base58</code> = TVBox/XC 风格 Base58</td>
+            <code>tvbox</code> = TVBox JSON<br>
+            <code>tvbox-base58</code> = TVBox Base58</td>
       </tr>
       <tr>
         <td>source</td>
@@ -404,8 +404,8 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=jin18</code> <button class="copy-btn">复制</button></p>
     <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=jin18</code> <button class="copy-btn">复制</button></p>
     <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=jin18</code> <button class="copy-btn">复制</button></p>
-    <p>TVBox/XC 风格 JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=jin18</code> <button class="copy-btn">复制</button></p>
-    <p>TVBox/XC 风格 Base58：<br><code class="copyable">${currentOrigin}?format=tvbox-base58&source=jin18</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=jin18</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox Base58：<br><code class="copyable">${currentOrigin}?format=tvbox-base58&source=jin18</code> <button class="copy-btn">复制</button></p>
   </div>
   
   <div class="section">
@@ -414,8 +414,8 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=jingjian</code> <button class="copy-btn">复制</button></p>
     <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=jingjian</code> <button class="copy-btn">复制</button></p>
     <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=jingjian</code> <button class="copy-btn">复制</button></p>
-    <p>TVBox/XC 风格 JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=jingjian</code> <button class="copy-btn">复制</button></p>
-    <p>TVBox/XC 风格 Base58：<br><code class="copyable">${currentOrigin}?format=tvbox-base58&source=jingjian</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=jingjian</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox Base58：<br><code class="copyable">${currentOrigin}?format=tvbox-base58&source=jingjian</code> <button class="copy-btn">复制</button></p>
   </div>
   
   <div class="section">
@@ -424,8 +424,8 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <p>中转代理 JSON：<br><code class="copyable">${currentOrigin}?format=1&source=full</code> <button class="copy-btn">复制</button></p>
     <p>原始 Base58：<br><code class="copyable">${currentOrigin}?format=2&source=full</code> <button class="copy-btn">复制</button></p>
     <p>中转 Base58：<br><code class="copyable">${currentOrigin}?format=3&source=full</code> <button class="copy-btn">复制</button></p>
-    <p>TVBox/XC 风格 JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=full</code> <button class="copy-btn">复制</button></p>
-    <p>TVBox/XC 风格 Base58：<br><code class="copyable">${currentOrigin}?format=tvbox-base58&source=full</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox JSON：<br><code class="copyable">${currentOrigin}?format=tvbox&source=full</code> <button class="copy-btn">复制</button></p>
+    <p>TVBox Base58：<br><code class="copyable">${currentOrigin}?format=tvbox-base58&source=full</code> <button class="copy-btn">复制</button></p>
   </div>
   
   <h2>支持的功能</h2>
@@ -437,7 +437,7 @@ async function handleHomePage(currentOrigin, defaultPrefix) {
     <li>✅ 超时保护（9 秒）</li>
     <li>✅ 支持多种配置源切换</li>
     <li>✅ 支持 Base58 编码输出</li>
-    <li>✅ 支持 TVBox/XC 风格 JSON / Base58 输出（format=tvbox / tvbox-base58）</li>
+    <li>✅ 支持 TVBox JSON / Base58 输出（format=tvbox / tvbox-base58）</li>
   </ul>
   
   <script>
