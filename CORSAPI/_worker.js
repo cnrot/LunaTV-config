@@ -144,7 +144,7 @@ function toTvboxConfig(data, origin) {
     {
       key: 'hot-aggregator',
       name: '🔥热门聚合',
-      type: 1,
+      type: 3,
       api: tvboxApi,
       searchable: 1,
       quickSearch: 1,
