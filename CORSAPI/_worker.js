@@ -391,9 +391,26 @@ async function handleTvboxAggRequest(reqUrl) {
   const playId = reqUrl.searchParams.get('id') || ''
 
   if (!ac || ac === 'home') {
+    const homeItems = []
+    for (const source of sourcePool) {
+      const listData = await fetchSourceList(source, 1)
+      for (const vod of listData.slice(0, 12)) {
+        homeItems.push(toAggListItem(vod, source.key))
+      }
+      if (homeItems.length >= 120) break
+    }
+
+    const dedupMap = new Map()
+    for (const item of homeItems) {
+      const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
+      if (!dedupMap.has(k)) dedupMap.set(k, item)
+    }
+
+    const list = Array.from(dedupMap.values()).slice(0, 40)
+
     return tvboxJsonResponse({
       class: TVBOX_CLASS_MAP.map(({ type_id, type_name }) => ({ type_id, type_name })),
-      list: []
+      list
     })
   }
 
