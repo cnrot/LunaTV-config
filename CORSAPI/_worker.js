@@ -88,47 +88,82 @@ function addOrReplacePrefix(obj, newPrefix) {
 }
 
 function toTvboxConfig(data) {
-  if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') {
-    return {
-      spider: '',
-      wallpaper: '',
-      sites: [],
-      parses: [],
-      lives: [],
-      logo: '',
-      proxy: [],
-      rules: [],
-      doh: [],
-      ijk: [],
-      ads: []
-    }
-  }
-
-  const sites = Object.entries(data.api_site)
-    .filter(([, item]) => item && typeof item === 'object')
-    .map(([key, item]) => ({
-      key,
-      name: typeof item.name === 'string' ? item.name : key,
-      type: 1,
-      api: typeof item.api === 'string' ? item.api : '',
-      searchable: 1,
-      changeable: 1,
-      quickSearch: 1
-    }))
-    .filter(site => site.api)
-
-  return {
+  const buildEmptyConfig = () => ({
     spider: '',
     wallpaper: '',
-    sites,
+    sites: [],
     parses: [],
     lives: [],
     logo: '',
     proxy: [],
     rules: [],
-    doh: [],
-    ijk: [],
-    ads: []
+    doh: [
+      { name: 'Google', url: 'https://dns.google/dns-query' },
+      { name: 'Cloudflare', url: 'https://cloudflare-dns.com/dns-query' }
+    ],
+    ijk: [
+      { group: '软解码', options: [
+        { category: 4, name: 'opensles', value: 0 },
+        { category: 4, name: 'overlay-format', value: 'fcc-_es2' },
+        { category: 4, name: 'framedrop', value: 1 },
+        { category: 4, name: 'start-on-prepared', value: 1 },
+        { category: 1, name: 'http-detect-range-support', value: 0 },
+        { category: 1, name: 'fflags', value: 'fastseek' },
+        { category: 2, name: 'skip_loop_filter', value: 48 }
+      ] },
+      { group: '硬解码', options: [
+        { category: 4, name: 'mediacodec', value: 1 },
+        { category: 4, name: 'mediacodec-auto-rotate', value: 1 },
+        { category: 4, name: 'mediacodec-handle-resolution-change', value: 1 },
+        { category: 4, name: 'opensles', value: 0 },
+        { category: 4, name: 'framedrop', value: 1 },
+        { category: 4, name: 'start-on-prepared', value: 1 },
+        { category: 1, name: 'http-detect-range-support', value: 0 },
+        { category: 1, name: 'fflags', value: 'fastseek' },
+        { category: 2, name: 'skip_loop_filter', value: 48 }
+      ] }
+    ],
+    ads: [
+      'mimg.0c1q0l.cn',
+      'www.googletagmanager.com',
+      'www.google-analytics.com',
+      'mc.usihnbcq.cn',
+      'mg.g1mm3d.cn',
+      'mscs.svaeuzh.cn',
+      'cnzz.hhttm.top',
+      'tp.vinuxhome.com',
+      'cnzz.mmstat.com',
+      'www.dmtavern.com'
+    ]
+  })
+
+  if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') {
+    return buildEmptyConfig()
+  }
+
+  const sites = Object.entries(data.api_site)
+    .filter(([, item]) => item && typeof item === 'object')
+    .map(([key, item]) => {
+      const comment = typeof item._comment === 'string' ? item._comment : ''
+      const disableSearch = comment.includes('无搜索结果') || comment.includes('污染搜索结果')
+      return {
+        key,
+        name: typeof item.name === 'string' ? item.name : key,
+        type: 1,
+        api: typeof item.api === 'string' ? item.api : '',
+        ext: typeof item.detail === 'string' ? item.detail : '',
+        searchable: disableSearch ? 0 : 1,
+        changeable: 1,
+        quickSearch: disableSearch ? 0 : 1,
+        filterable: 1,
+        playerType: 1
+      }
+    })
+    .filter(site => site.api)
+
+  return {
+    ...buildEmptyConfig(),
+    sites
   }
 }
 
