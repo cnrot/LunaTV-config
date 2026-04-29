@@ -87,7 +87,7 @@ function addOrReplacePrefix(obj, newPrefix) {
   return newObj
 }
 
-function toTvboxConfig(data) {
+function toTvboxConfig(data, origin) {
   const buildEmptyConfig = () => ({
     spider: '',
     wallpaper: '',
@@ -137,32 +137,45 @@ function toTvboxConfig(data) {
     ]
   })
 
-  if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') {
-    return buildEmptyConfig()
-  }
+  const baseConfig = buildEmptyConfig()
+  const tvboxApi = `${origin}/?tvbox_agg=1`
 
-  const sites = Object.entries(data.api_site)
-    .filter(([, item]) => item && typeof item === 'object')
-    .map(([key, item]) => {
-      const comment = typeof item._comment === 'string' ? item._comment : ''
-      const disableSearch = comment.includes('无搜索结果') || comment.includes('污染搜索结果')
-      return {
-        key,
-        name: typeof item.name === 'string' ? item.name : key,
+  const sites = [
+    {
+      key: 'hot-aggregator',
+      name: '🔥热门聚合',
+      type: 1,
+      api: tvboxApi,
+      searchable: 1,
+      quickSearch: 1,
+      changeable: 0,
+      filterable: 1,
+      playerType: 1
+    }
+  ]
+
+  if (data && typeof data === 'object' && data.api_site && typeof data.api_site === 'object') {
+    const hiddenPoolSites = Object.entries(data.api_site)
+      .filter(([, item]) => item && typeof item === 'object' && typeof item.api === 'string' && item.api)
+      .map(([key, item]) => ({
+        key: `pool-${key}`,
+        name: `🧩${typeof item.name === 'string' ? item.name : key}`,
         type: 1,
         api: typeof item.api === 'string' ? item.api : '',
         ext: typeof item.detail === 'string' ? item.detail : '',
-        searchable: disableSearch ? 0 : 1,
+        searchable: 0,
         changeable: 1,
-        quickSearch: disableSearch ? 0 : 1,
+        quickSearch: 0,
         filterable: 1,
         playerType: 1
-      }
-    })
-    .filter(site => site.api)
+      }))
+      .filter(site => site.api)
+
+    sites.push(...hiddenPoolSites)
+  }
 
   return {
-    ...buildEmptyConfig(),
+    ...baseConfig,
     sites
   }
 }
@@ -202,6 +215,205 @@ async function logError(type, info) {
   return
 }
 
+const TVBOX_CLASS_MAP = [
+  { type_id: 'movie', type_name: '热门影视', keywords: ['电影', 'movie', '动作', '喜剧', '剧情'] },
+  { type_id: 'tv', type_name: '热门剧集', keywords: ['剧', '连续剧', 'tv', '国产', '韩剧', '美剧'] },
+  { type_id: 'variety', type_name: '热门综艺', keywords: ['综艺', 'show'] },
+  { type_id: 'anime', type_name: '热门动漫', keywords: ['动漫', '动画', 'anime'] },
+  { type_id: 'short', type_name: '热门短剧', keywords: ['短剧', '微短剧', '短片'] }
+]
+
+function normalizeText(text) {
+  if (!text || typeof text !== 'string') return ''
+  return text
+    .toLowerCase()
+    .replace(/[\s\-_.·]/g, '')
+    .replace(/[【】\[\]()（）]/g, '')
+    .replace(/高清|国语|中字|蓝光|超清/g, '')
+}
+
+function encodeAggPayload(payload) {
+  try {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(payload))))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/g, '')
+  } catch {
+    return ''
+  }
+}
+
+function decodeAggPayload(token) {
+  try {
+    const base64 = token.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((token.length + 3) % 4)
+    const raw = decodeURIComponent(escape(atob(base64)))
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+function tvboxJsonResponse(data) {
+  return new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json;charset=UTF-8', ...CORS_HEADERS }
+  })
+}
+
+async function fetchSourceJson(url) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 9000)
+  try {
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function getSourcePoolFromData(data) {
+  if (!data || typeof data !== 'object' || !data.api_site || typeof data.api_site !== 'object') return []
+  return Object.entries(data.api_site)
+    .filter(([, item]) => item && typeof item === 'object' && typeof item.api === 'string' && item.api)
+    .map(([key, item]) => ({
+      key,
+      name: typeof item.name === 'string' ? item.name : key,
+      api: item.api
+    }))
+}
+
+function classifyVod(vod) {
+  const text = `${vod.type_name || ''} ${vod.vod_class || ''} ${vod.vod_name || ''}`.toLowerCase()
+  for (const cls of TVBOX_CLASS_MAP) {
+    if (cls.keywords.some(k => text.includes(k))) return cls.type_id
+  }
+  return 'movie'
+}
+
+function toAggListItem(vod, sourceKey) {
+  const payload = {
+    sourceKey,
+    id: String(vod.vod_id || ''),
+    name: vod.vod_name || '',
+    type: classifyVod(vod),
+    ts: Date.now()
+  }
+  return {
+    vod_id: encodeAggPayload(payload),
+    vod_name: vod.vod_name || '未知标题',
+    vod_pic: vod.vod_pic || '',
+    vod_remarks: vod.vod_remarks || vod.type_name || '',
+    vod_year: vod.vod_year || '',
+    vod_score: vod.vod_score || ''
+  }
+}
+
+async function buildPoolCandidates(data) {
+  const pool = getSourcePoolFromData(data)
+  const tested = await Promise.all(pool.map(async (src) => {
+    const probe = await fetchSourceJson(`${src.api}${src.api.includes('?') ? '&' : '?'}ac=videolist&pg=1`)
+    return probe && Array.isArray(probe.list) ? src : null
+  }))
+  return tested.filter(Boolean)
+}
+
+async function handleTvboxAggRequest(reqUrl) {
+  const sourceParam = reqUrl.searchParams.get('source')
+  const selectedSource = JSON_SOURCES[sourceParam] || JSON_SOURCES.full
+  const data = await getCachedJSON(selectedSource)
+  const sourcePool = await buildPoolCandidates(data)
+
+  const ac = reqUrl.searchParams.get('ac') || ''
+  const t = reqUrl.searchParams.get('t') || ''
+  const wd = reqUrl.searchParams.get('wd') || ''
+  const pg = Math.max(1, Number(reqUrl.searchParams.get('pg') || '1'))
+  const ids = reqUrl.searchParams.get('ids') || ''
+  const playId = reqUrl.searchParams.get('id') || ''
+
+  if (!ac) {
+    return tvboxJsonResponse({
+      class: TVBOX_CLASS_MAP.map(({ type_id, type_name }) => ({ type_id, type_name })),
+      list: []
+    })
+  }
+
+  if (ac === 'videolist' && t) {
+    const results = []
+    for (const source of sourcePool) {
+      const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&pg=${pg}`)
+      if (!res || !Array.isArray(res.list)) continue
+      for (const vod of res.list) {
+        if (classifyVod(vod) === t) results.push(toAggListItem(vod, source.key))
+      }
+    }
+    const dedupMap = new Map()
+    for (const item of results) {
+      const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
+      if (!dedupMap.has(k)) dedupMap.set(k, item)
+    }
+    const list = Array.from(dedupMap.values()).slice(0, 80)
+    return tvboxJsonResponse({ page: pg, pagecount: 999, limit: list.length, total: list.length, list })
+  }
+
+  if (ac === 'videolist' && wd) {
+    const all = []
+    for (const source of sourcePool) {
+      const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&wd=${encodeURIComponent(wd)}&pg=${pg}`)
+      if (!res || !Array.isArray(res.list)) continue
+      for (const vod of res.list) all.push(toAggListItem(vod, source.key))
+    }
+    const dedupMap = new Map()
+    for (const item of all) {
+      const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
+      if (!dedupMap.has(k)) dedupMap.set(k, item)
+    }
+    const list = Array.from(dedupMap.values()).slice(0, 120)
+    return tvboxJsonResponse({ page: pg, pagecount: 999, limit: list.length, total: list.length, list })
+  }
+
+  if (ac === 'detail' && ids) {
+    const payload = decodeAggPayload(ids)
+    if (!payload || !payload.sourceKey || !payload.id) return tvboxJsonResponse({ list: [] })
+    const source = sourcePool.find(s => s.key === payload.sourceKey)
+    if (!source) return tvboxJsonResponse({ list: [] })
+
+    const detailRes = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=detail&ids=${encodeURIComponent(payload.id)}`)
+    const vod = detailRes && Array.isArray(detailRes.list) ? detailRes.list[0] : null
+    if (!vod) return tvboxJsonResponse({ list: [] })
+
+    const playFrom = String(vod.vod_play_from || '')
+    const playUrl = String(vod.vod_play_url || '')
+    if (playFrom && playUrl) {
+      const groups = playUrl.split('$$$').map(group => group.split('#').map((ep) => {
+        const i = ep.indexOf('$')
+        if (i === -1) return ep
+        const epName = ep.slice(0, i)
+        const rawPlay = ep.slice(i + 1)
+        const playToken = encodeAggPayload({ sourceKey: source.key, play: rawPlay, ts: Date.now() })
+        return `${epName}$aggplay:${playToken}`
+      }).join('#'))
+      vod.vod_play_url = groups.join('$$$')
+    }
+
+    return tvboxJsonResponse({ list: [vod] })
+  }
+
+  if (ac === 'play' && playId.startsWith('aggplay:')) {
+    const token = playId.slice('aggplay:'.length)
+    const payload = decodeAggPayload(token)
+    if (!payload || !payload.play) {
+      return tvboxJsonResponse({ parse: 1, url: playId, header: '' })
+    }
+    const url = String(payload.play)
+    const direct = /^https?:\/\/.+\.(m3u8|mp4)(\?.*)?$/i.test(url)
+    return tvboxJsonResponse({ parse: direct ? 0 : 1, url, header: '' })
+  }
+
+  return tvboxJsonResponse({ list: [] })
+}
+
 // ---------- 主逻辑 ----------
 async function handleRequest(request) {
   // 快速处理 OPTIONS 请求
@@ -215,6 +427,7 @@ async function handleRequest(request) {
   const formatParam = reqUrl.searchParams.get('format')
   const prefixParam = reqUrl.searchParams.get('prefix')
   const sourceParam = reqUrl.searchParams.get('source')
+  const tvboxAggParam = reqUrl.searchParams.get('tvbox_agg')
 
   const currentOrigin = reqUrl.origin
   const defaultPrefix = currentOrigin + '/?url='
@@ -224,6 +437,10 @@ async function handleRequest(request) {
     return new Response('OK', { status: 200, headers: CORS_HEADERS })
   }
 
+  if (tvboxAggParam === '1') {
+    return handleTvboxAggRequest(reqUrl)
+  }
+
   // 通用代理请求处理
   if (targetUrlParam) {
     return handleProxyRequest(request, targetUrlParam, currentOrigin)
@@ -231,7 +448,7 @@ async function handleRequest(request) {
 
   // JSON 格式输出处理
   if (formatParam !== null) {
-    return handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix)
+    return handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix, currentOrigin)
   }
 
   // 返回首页文档
@@ -299,7 +516,7 @@ async function handleProxyRequest(request, targetUrlParam, currentOrigin) {
 }
 
 // ---------- JSON 格式输出处理子模块 ----------
-async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix) {
+async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaultPrefix, currentOrigin) {
   try {
     const config = FORMAT_CONFIG[formatParam]
     if (!config) {
@@ -314,7 +531,7 @@ async function handleFormatRequest(formatParam, sourceParam, prefixParam, defaul
       : data
 
     if (config.tvbox) {
-      const tvboxData = toTvboxConfig(data)
+      const tvboxData = toTvboxConfig(data, currentOrigin)
       if (config.base58) {
         const encoded = base58Encode(tvboxData)
         return new Response(encoded, {
