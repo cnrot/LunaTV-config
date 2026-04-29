@@ -216,11 +216,11 @@ async function logError(type, info) {
 }
 
 const TVBOX_CLASS_MAP = [
-  { type_id: 'movie', type_name: '热门影视', keywords: ['电影', 'movie', '动作', '喜剧', '剧情'] },
-  { type_id: 'tv', type_name: '热门剧集', keywords: ['剧', '连续剧', 'tv', '国产', '韩剧', '美剧'] },
-  { type_id: 'variety', type_name: '热门综艺', keywords: ['综艺', 'show'] },
-  { type_id: 'anime', type_name: '热门动漫', keywords: ['动漫', '动画', 'anime'] },
-  { type_id: 'short', type_name: '热门短剧', keywords: ['短剧', '微短剧', '短片'] }
+  { type_id: '1', type_name: '热门影视', alias: ['movie', '热门影视'], keywords: ['电影', 'movie', '动作', '喜剧', '剧情'] },
+  { type_id: '2', type_name: '热门剧集', alias: ['tv', '热门剧集'], keywords: ['剧', '连续剧', 'tv', '国产', '韩剧', '美剧'] },
+  { type_id: '3', type_name: '热门综艺', alias: ['variety', 'show', '热门综艺'], keywords: ['综艺', 'show'] },
+  { type_id: '4', type_name: '热门动漫', alias: ['anime', '热门动漫'], keywords: ['动漫', '动画', 'anime'] },
+  { type_id: '5', type_name: '热门短剧', alias: ['short', '热门短剧'], keywords: ['短剧', '微短剧', '短片'] }
 ]
 
 function normalizeText(text) {
@@ -289,7 +289,23 @@ function classifyVod(vod) {
   for (const cls of TVBOX_CLASS_MAP) {
     if (cls.keywords.some(k => text.includes(k))) return cls.type_id
   }
-  return 'movie'
+  return '1'
+}
+
+function normalizeClassId(raw) {
+  const text = String(raw || '').trim().toLowerCase()
+  if (!text) return '1'
+  const byId = TVBOX_CLASS_MAP.find(c => c.type_id === text)
+  if (byId) return byId.type_id
+  const byAlias = TVBOX_CLASS_MAP.find(c => c.alias.some(a => a.toLowerCase() === text))
+  if (byAlias) return byAlias.type_id
+  const byName = TVBOX_CLASS_MAP.find(c => c.type_name === raw)
+  if (byName) return byName.type_id
+  if (text.includes('剧')) return '2'
+  if (text.includes('综艺')) return '3'
+  if (text.includes('动漫') || text.includes('动画')) return '4'
+  if (text.includes('短剧')) return '5'
+  return '1'
 }
 
 function toAggListItem(vod, sourceKey) {
@@ -332,20 +348,21 @@ async function handleTvboxAggRequest(reqUrl) {
   const ids = reqUrl.searchParams.get('ids') || ''
   const playId = reqUrl.searchParams.get('id') || ''
 
-  if (!ac) {
+  if (!ac || ac === 'home') {
     return tvboxJsonResponse({
       class: TVBOX_CLASS_MAP.map(({ type_id, type_name }) => ({ type_id, type_name })),
       list: []
     })
   }
 
-  if (ac === 'videolist' && t) {
+  if ((ac === 'videolist' || ac === 'list' || ac === 'category') && t) {
+    const normalizedType = normalizeClassId(t)
     const results = []
     for (const source of sourcePool) {
       const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&pg=${pg}`)
       if (!res || !Array.isArray(res.list)) continue
       for (const vod of res.list) {
-        if (classifyVod(vod) === t) results.push(toAggListItem(vod, source.key))
+        if (classifyVod(vod) === normalizedType) results.push(toAggListItem(vod, source.key))
       }
     }
     const dedupMap = new Map()
@@ -353,11 +370,28 @@ async function handleTvboxAggRequest(reqUrl) {
       const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
       if (!dedupMap.has(k)) dedupMap.set(k, item)
     }
-    const list = Array.from(dedupMap.values()).slice(0, 80)
+    let list = Array.from(dedupMap.values())
+
+    if (!list.length) {
+      const fallback = []
+      for (const source of sourcePool) {
+        const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&pg=${pg}`)
+        if (!res || !Array.isArray(res.list)) continue
+        for (const vod of res.list.slice(0, 20)) fallback.push(toAggListItem(vod, source.key))
+      }
+      const fbMap = new Map()
+      for (const item of fallback) {
+        const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
+        if (!fbMap.has(k)) fbMap.set(k, item)
+      }
+      list = Array.from(fbMap.values())
+    }
+
+    list = list.slice(0, 80)
     return tvboxJsonResponse({ page: pg, pagecount: 999, limit: list.length, total: list.length, list })
   }
 
-  if (ac === 'videolist' && wd) {
+  if ((ac === 'videolist' || ac === 'search') && wd) {
     const all = []
     for (const source of sourcePool) {
       const res = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=videolist&wd=${encodeURIComponent(wd)}&pg=${pg}`)
