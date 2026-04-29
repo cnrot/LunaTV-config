@@ -349,6 +349,7 @@ function normalizeClassId(raw) {
 
 function toAggListItem(vod, sourceKey) {
   const payload = {
+    mode: 'source',
     sourceKey,
     id: String(vod.vod_id || ''),
     name: vod.vod_name || '',
@@ -365,9 +366,87 @@ function toAggListItem(vod, sourceKey) {
   }
 }
 
+function toAggListItemFromDouban(item, typeId) {
+  const title = item.title || item.name || '未知标题'
+  const year = String(item.year || '').slice(0, 4)
+  const score = item.rating?.value || item.rating?.score || item.rate || ''
+  const poster = item.cover_url || item.pic?.normal || item.pic?.large || item.poster || ''
+  const payload = {
+    mode: 'douban',
+    q: title,
+    year,
+    type: typeId,
+    ts: Date.now()
+  }
+
+  return {
+    vod_id: encodeAggPayload(payload),
+    vod_name: title,
+    vod_pic: poster,
+    vod_remarks: item.card_subtitle || item.honor_infos?.[0]?.title || '',
+    vod_year: year,
+    vod_score: score ? String(score) : ''
+  }
+}
+
 async function buildPoolCandidates(data) {
   const pool = getSourcePoolFromData(data)
   return pool.slice(0, 30)
+}
+
+async function fetchDoubanRecentHot(kind, category, type, start = 0, limit = 20) {
+  const url = `https://m.douban.com/rexxar/api/v2/subject/recent_hot/${kind}?start=${start}&limit=${limit}&category=${encodeURIComponent(category)}&type=${encodeURIComponent(type)}`
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 9000)
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://m.douban.com/'
+      }
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    if (Array.isArray(data?.items)) return data.items
+    if (Array.isArray(data?.subject_collection_items)) return data.subject_collection_items
+    return []
+  } catch {
+    return []
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function buildDoubanClassList(typeId, pg = 1) {
+  const start = (Math.max(1, pg) - 1) * 20
+  const mapping = {
+    '1': { kind: 'movie', category: '热门', type: '全部' },
+    '2': { kind: 'tv', category: 'tv', type: 'tv' },
+    '3': { kind: 'tv', category: 'show', type: 'show' },
+    '4': { kind: 'tv', category: '热门', type: '动画' },
+    '5': { kind: 'tv', category: '热门', type: '短剧' }
+  }
+  const conf = mapping[typeId] || mapping['1']
+  const items = await fetchDoubanRecentHot(conf.kind, conf.category, conf.type, start, 20)
+  return items.map(item => toAggListItemFromDouban(item, typeId)).filter(v => v.vod_name && v.vod_pic)
+}
+
+async function searchInSourcePool(sourcePool, keyword, pg = 1, limit = 40) {
+  const all = []
+  for (const source of sourcePool) {
+    const listData = await fetchSourceSearchList(source, keyword, pg)
+    for (const vod of listData) all.push(toAggListItem(vod, source.key))
+  }
+
+  const dedupMap = new Map()
+  for (const item of all) {
+    const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
+    if (!dedupMap.has(k)) dedupMap.set(k, item)
+  }
+
+  return Array.from(dedupMap.values()).slice(0, limit)
 }
 
 async function handleTvboxAggRequest(reqUrl) {
@@ -391,22 +470,25 @@ async function handleTvboxAggRequest(reqUrl) {
   const playId = reqUrl.searchParams.get('id') || ''
 
   if (!ac || ac === 'home') {
-    const homeItems = []
-    for (const source of sourcePool) {
-      const listData = await fetchSourceList(source, 1)
-      for (const vod of listData.slice(0, 12)) {
-        homeItems.push(toAggListItem(vod, source.key))
+    let list = await buildDoubanClassList('1', 1)
+
+    if (!list.length) {
+      const homeItems = []
+      for (const source of sourcePool) {
+        const listData = await fetchSourceList(source, 1)
+        for (const vod of listData.slice(0, 12)) {
+          homeItems.push(toAggListItem(vod, source.key))
+        }
+        if (homeItems.length >= 120) break
       }
-      if (homeItems.length >= 120) break
-    }
 
-    const dedupMap = new Map()
-    for (const item of homeItems) {
-      const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
-      if (!dedupMap.has(k)) dedupMap.set(k, item)
+      const dedupMap = new Map()
+      for (const item of homeItems) {
+        const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
+        if (!dedupMap.has(k)) dedupMap.set(k, item)
+      }
+      list = Array.from(dedupMap.values()).slice(0, 40)
     }
-
-    const list = Array.from(dedupMap.values()).slice(0, 40)
 
     return tvboxJsonResponse({
       class: TVBOX_CLASS_MAP.map(({ type_id, type_name }) => ({ type_id, type_name })),
@@ -416,32 +498,27 @@ async function handleTvboxAggRequest(reqUrl) {
 
   if ((ac === 'videolist' || ac === 'list' || ac === 'category') && t) {
     const normalizedType = normalizeClassId(t)
-    const results = []
-    for (const source of sourcePool) {
-      const listData = await fetchSourceList(source, pg)
-      for (const vod of listData) {
-        if (classifyVod(vod) === normalizedType) results.push(toAggListItem(vod, source.key))
-      }
-    }
-    const dedupMap = new Map()
-    for (const item of results) {
-      const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
-      if (!dedupMap.has(k)) dedupMap.set(k, item)
-    }
-    let list = Array.from(dedupMap.values())
+
+    let list = await buildDoubanClassList(normalizedType, pg)
 
     if (!list.length) {
-      const fallback = []
+      const results = []
       for (const source of sourcePool) {
         const listData = await fetchSourceList(source, pg)
-        for (const vod of listData.slice(0, 20)) fallback.push(toAggListItem(vod, source.key))
+        for (const vod of listData) {
+          if (classifyVod(vod) === normalizedType) results.push(toAggListItem(vod, source.key))
+        }
       }
-      const fbMap = new Map()
-      for (const item of fallback) {
+      const dedupMap = new Map()
+      for (const item of results) {
         const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
-        if (!fbMap.has(k)) fbMap.set(k, item)
+        if (!dedupMap.has(k)) dedupMap.set(k, item)
       }
-      list = Array.from(fbMap.values())
+      list = Array.from(dedupMap.values())
+    }
+
+    if (!list.length) {
+      list = await searchInSourcePool(sourcePool, TVBOX_CLASS_MAP.find(c => c.type_id === normalizedType)?.type_name || '热门', 1, 60)
     }
 
     list = list.slice(0, 80)
@@ -449,27 +526,33 @@ async function handleTvboxAggRequest(reqUrl) {
   }
 
   if ((ac === 'videolist' || ac === 'search') && wd) {
-    const all = []
-    for (const source of sourcePool) {
-      const listData = await fetchSourceSearchList(source, wd, pg)
-      for (const vod of listData) all.push(toAggListItem(vod, source.key))
-    }
-    const dedupMap = new Map()
-    for (const item of all) {
-      const k = `${normalizeText(item.vod_name)}|${item.vod_year}|${item.vod_pic}`
-      if (!dedupMap.has(k)) dedupMap.set(k, item)
-    }
-    const list = Array.from(dedupMap.values()).slice(0, 120)
+    const list = await searchInSourcePool(sourcePool, wd, pg, 120)
     return tvboxJsonResponse({ page: pg, pagecount: 999, limit: list.length, total: list.length, list })
   }
 
   if (ac === 'detail' && ids) {
     const payload = decodeAggPayload(ids)
-    if (!payload || !payload.sourceKey || !payload.id) return tvboxJsonResponse({ list: [] })
-    const source = sourcePool.find(s => s.key === payload.sourceKey)
-    if (!source) return tvboxJsonResponse({ list: [] })
+    if (!payload) return tvboxJsonResponse({ list: [] })
 
-    const detailRes = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=detail&ids=${encodeURIComponent(payload.id)}`)
+    let source = null
+    let targetId = ''
+
+    if (payload.mode === 'douban' && payload.q) {
+      const candidates = await searchInSourcePool(sourcePool, payload.q, 1, 12)
+      const first = candidates.find(item => item.vod_id)
+      if (!first) return tvboxJsonResponse({ list: [] })
+      const firstPayload = decodeAggPayload(first.vod_id)
+      if (!firstPayload || !firstPayload.sourceKey || !firstPayload.id) return tvboxJsonResponse({ list: [] })
+      source = sourcePool.find(s => s.key === firstPayload.sourceKey)
+      targetId = firstPayload.id
+    } else if (payload.sourceKey && payload.id) {
+      source = sourcePool.find(s => s.key === payload.sourceKey)
+      targetId = payload.id
+    }
+
+    if (!source || !targetId) return tvboxJsonResponse({ list: [] })
+
+    const detailRes = await fetchSourceJson(`${source.api}${source.api.includes('?') ? '&' : '?'}ac=detail&ids=${encodeURIComponent(targetId)}`)
     const vod = detailRes && Array.isArray(detailRes.list) ? detailRes.list[0] : null
     if (!vod) return tvboxJsonResponse({ list: [] })
 
